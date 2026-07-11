@@ -59,7 +59,7 @@ header {
 /* Opaque cover over Google's location label (top-left of embed) */
 #label-cover {
   position: absolute; top: 0; left: 0; z-index: 4;
-  width: 300px; height: 110px;
+  width: 330px; height: 160px;
   background: var(--bg);
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
@@ -86,6 +86,14 @@ header {
   box-shadow: 0 4px 16px rgba(232,200,74,.3); white-space: nowrap;
 }
 #open-map-btn:active { opacity: .85; }
+#skip-btn {
+  background: transparent; color: var(--muted);
+  font-family: 'DM Sans', sans-serif; font-size: 13px;
+  border: 1px solid var(--border); padding: 12px 16px;
+  border-radius: 10px; cursor: pointer; white-space: nowrap;
+  transition: border-color .2s, color .2s;
+}
+#skip-btn:hover { border-color: var(--text); color: var(--text); }
 
 /* MAP OVERLAY */
 #map-overlay {
@@ -181,6 +189,7 @@ header {
 
 <div id="bottom-bar">
   <p id="bar-hint">Look around, then open the map to guess</p>
+  <button id="skip-btn" onclick="skipLocation()" title="Broken or blank? Swap this location">↻ Skip</button>
   <button id="open-map-btn" onclick="openMap()">🗺 Guess</button>
 </div>
 
@@ -264,6 +273,31 @@ function shuffle(arr) {
   return a;
 }
 
+function getDead() {
+  try { return JSON.parse(localStorage.getItem('mapguessr_dead') || '[]'); }
+  catch { return []; }
+}
+function markDead(pano) {
+  try {
+    const dead = getDead();
+    if (!dead.includes(pano)) dead.push(pano);
+    localStorage.setItem('mapguessr_dead', JSON.stringify(dead));
+  } catch {}
+}
+
+function skipLocation() {
+  // Mark current pano as dead so it never comes back on this device
+  markDead(currentLoc.pano);
+  // Find a replacement not already in this game and not blacklisted
+  const dead = getDead();
+  const used = rounds.map(r => r.pano);
+  const candidates = LOCATIONS.filter(l => !used.includes(l.pano) && !dead.includes(l.pano));
+  const pool = candidates.length ? candidates : LOCATIONS.filter(l => !used.includes(l.pano));
+  if (!pool.length) { nextRound(); return; } // nothing left to swap in
+  rounds[curr] = pool[Math.floor(Math.random() * pool.length)];
+  loadRound();
+}
+
 function getRecent() {
   try { return JSON.parse(localStorage.getItem('mapguessr_recent') || '[]'); }
   catch { return []; }
@@ -278,9 +312,11 @@ function saveRecent(panos) {
 
 function startGame() {
   const recent = getRecent();
+  const dead = getDead();
+  const alive = LOCATIONS.filter(l => !dead.includes(l.pano));
   // Prefer locations not seen in the last couple of games
-  const fresh = LOCATIONS.filter(l => !recent.includes(l.pano));
-  const pool = fresh.length >= TOTAL ? fresh : LOCATIONS;
+  const fresh = alive.filter(l => !recent.includes(l.pano));
+  const pool = fresh.length >= TOTAL ? fresh : (alive.length >= TOTAL ? alive : LOCATIONS);
   rounds = shuffle(pool).slice(0, TOTAL);
   saveRecent(rounds.map(r => r.pano));
   curr = 0; totalScore = 0;
