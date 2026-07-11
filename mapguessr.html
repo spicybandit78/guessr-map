@@ -56,12 +56,20 @@ header {
 @keyframes spin { to { transform: rotate(360deg); } }
 #sv-loading p { color: var(--muted); font-size: 13px; letter-spacing: 1px; }
 
-#round-label {
-  position: absolute; top: 10px; left: 10px; z-index: 4;
-  background: rgba(13,15,20,.85); border: 1px solid var(--border);
-  border-radius: 4px; padding: 4px 10px;
-  font-size: 11px; letter-spacing: 1px; color: var(--muted);
+/* Opaque cover over Google's location label (top-left of embed) */
+#label-cover {
+  position: absolute; top: 0; left: 0; z-index: 4;
+  width: 300px; height: 110px;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-radius: 0 0 12px 0;
+  display: flex; align-items: center; justify-content: center;
   pointer-events: none;
+}
+#round-label {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 18px; letter-spacing: 3px; color: var(--muted);
 }
 
 /* BOTTOM BAR */
@@ -168,7 +176,7 @@ header {
     <p>LOADING LOCATION…</p>
   </div>
   <iframe id="sv-frame" allowfullscreen allow="fullscreen"></iframe>
-  <div id="round-label">ROUND 1 / 5</div>
+  <div id="label-cover"><div id="round-label">ROUND 1 / 5</div></div>
 </div>
 
 <div id="bottom-bar">
@@ -246,9 +254,35 @@ window.addEventListener('DOMContentLoaded', () => {
   startGame();
 });
 
+function shuffle(arr) {
+  // Fisher-Yates (unbiased, unlike sort(random))
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function getRecent() {
+  try { return JSON.parse(localStorage.getItem('mapguessr_recent') || '[]'); }
+  catch { return []; }
+}
+function saveRecent(panos) {
+  try {
+    // Remember the last 2 games' worth of locations
+    const keep = [...panos, ...getRecent()].slice(0, TOTAL * 2);
+    localStorage.setItem('mapguessr_recent', JSON.stringify(keep));
+  } catch {}
+}
+
 function startGame() {
-  const shuffled = [...LOCATIONS].sort(() => Math.random() - .5);
-  rounds = shuffled.slice(0, TOTAL);
+  const recent = getRecent();
+  // Prefer locations not seen in the last couple of games
+  const fresh = LOCATIONS.filter(l => !recent.includes(l.pano));
+  const pool = fresh.length >= TOTAL ? fresh : LOCATIONS;
+  rounds = shuffle(pool).slice(0, TOTAL);
+  saveRecent(rounds.map(r => r.pano));
   curr = 0; totalScore = 0;
   updateHUD();
   loadRound();
